@@ -1,5 +1,4 @@
 import tensorflow as tf
-from tensorflow.keras import backend as K
 from tensorflow.python.ops.init_ops_v2 import _compute_fans
 
 
@@ -230,7 +229,7 @@ class ScaledSinusodialRepresentationDense(SinusodialRepresentationDense):
                 outputs.set_shape(output_shape)
         else:
             inputs = tf.cast(inputs, self._compute_dtype)
-            if K.is_sparse(inputs):
+            if tf.keras.backend.is_sparse(inputs):
                 # [W0 multiplication here !]
                 outputs = tf.sparse.sparse_dense_matmul(inputs, self.scale * self.kernel)
             else:

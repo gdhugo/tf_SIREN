@@ -7,7 +7,7 @@ from tf_siren import siren_mlp
 BATCH_SIZE = 8192
 
 # Image Reference - http://earthsongtiles.com/celtic_tiles.html
-img_filepath = '../data/celtic_spiral_knot.jpg'
+img_filepath = 'data/celtic_spiral_knot.jpg'
 img_raw = tf.io.read_file(img_filepath)
 img_ground_truth = tf.io.decode_image(img_raw, channels=3, dtype=tf.float32)
 
@@ -15,7 +15,7 @@ rows, cols, channels = img_ground_truth.shape
 pixel_count = rows * cols
 
 
-def build_eval_tensors():
+def build_eval_tensors(channels):
     img_mask_x = tf.range(0, rows, dtype=tf.int32)
     img_mask_y = tf.range(0, cols, dtype=tf.int32)
 
@@ -30,19 +30,18 @@ def build_eval_tensors():
     img_mask = tf.concat([img_mask_x, img_mask_y], axis=-1)
     img_mask = tf.reshape(img_mask, [-1, 2])
 
-    img_train = tf.reshape(img_ground_truth, [-1, 3])
+    img_train = tf.reshape(img_ground_truth, [-1, channels])
 
     return img_mask, img_train
 
 
-img_mask, img_eval = build_eval_tensors()
+img_mask, img_eval = build_eval_tensors(channels)
 
 test_dataset = tf.data.Dataset.from_tensor_slices((img_mask, img_eval))
 test_dataset = test_dataset.batch(BATCH_SIZE).prefetch(tf.data.experimental.AUTOTUNE)
 
 # Build model
-model = siren_mlp.SIRENModel(units=256, final_units=3, final_activation='sigmoid', num_layers=5,
-                             w0=1.0, w0_initial=30.0)
+model = siren_mlp.SIRENModel(units=256, final_units=channels, final_activation='sigmoid', num_layers=5, w0=1.0, w0_initial=30.0)
 
 # Restore model
 checkpoint_path = 'checkpoints/siren/inpainting/model'
