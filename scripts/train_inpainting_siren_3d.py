@@ -78,7 +78,7 @@ if not os.path.exists(logdir):
     os.makedirs(logdir)
 
 callbacks = [
-    tf.keras.callbacks.ModelCheckpoint(checkpoint_dir + 'model', monitor='loss', verbose=0,
+    tf.keras.callbacks.ModelCheckpoint(checkpoint_dir + 'model.weights.h5', monitor='loss', verbose=0,
                                        save_best_only=True, save_weights_only=True, mode='min'),
     tf.keras.callbacks.TensorBoard(logdir, update_freq='batch', profile_batch=20)
 ]
