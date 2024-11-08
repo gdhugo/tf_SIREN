@@ -54,8 +54,6 @@ model = siren_mlp.SIRENModel(units=256, final_units=channels, final_activation='
 
 # Restore model
 checkpoint_path = 'checkpoints/siren/inpainting/model'
-if len(glob.glob(checkpoint_path + "*.index")) == 0:
-    raise FileNotFoundError("Model checkpoint not found !")
 
 # instantiate model
 _ = model(tf.zeros([1, 3]))
