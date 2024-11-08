@@ -6,7 +6,7 @@ import SimpleITK as sitk
 import numpy as np
 
 SAMPLING_RATIO = 0.3
-BATCH_SIZE = 8192
+BATCH_SIZE = 1048576 #8192
 EPOCHS = 5000
 
 # Image - CT scan
@@ -46,7 +46,7 @@ def build_train_tensors():
 img_mask, img_train = build_train_tensors()
 
 train_dataset = tf.data.Dataset.from_tensor_slices((img_mask, img_train))
-train_dataset = train_dataset.shuffle(10000).batch(BATCH_SIZE).cache()
+train_dataset = train_dataset.shuffle(train_dataset.cardinality()).batch(BATCH_SIZE).cache()
 train_dataset = train_dataset.prefetch(tf.data.experimental.AUTOTUNE)
 
 # Build model
