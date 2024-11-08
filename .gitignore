@@ -131,3 +131,8 @@ dmypy.json
 # Local files
 logs/*
 checkpoints/*
+data/*.mha
+
+#mac
+.DS_Store
+data/image_ct.mha
