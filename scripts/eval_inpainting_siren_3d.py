@@ -1,4 +1,5 @@
 import glob
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 import tensorflow as tf
@@ -50,16 +51,23 @@ test_dataset = tf.data.Dataset.from_tensor_slices((img_mask, img_eval))
 test_dataset = test_dataset.batch(BATCH_SIZE).prefetch(tf.data.experimental.AUTOTUNE)
 
 # Build model
-model = siren_mlp.SIRENModel(units=256, final_units=channels, final_activation='sigmoid', num_layers=5, w0=1.0, w0_initial=30.0)
+#model = siren_mlp.SIRENModel(units=256, final_units=channels, final_activation='sigmoid', num_layers=5, w0=1.0, w0_initial=30.0)
 
 # Restore model
-checkpoint_path = 'checkpoints/siren/inpainting/model'
+checkpoint_dir = 'checkpoints/siren/inpainting/model'
 
 # instantiate model
-_ = model(tf.zeros([1, 3]))
+#_ = model(tf.zeros([1, 3]))
 
 # load checkpoint
-model.load_weights(checkpoint_path + '.weights.h5')
+def restore_model():
+    # restore the latest model
+    checkpoints = [checkpoint_dir + "/" + name for name in os.listdir(checkpoint_dir)]
+    if checkpoints:
+        latest_checkpoint = max(checkpoints, key=os.path.getctime)
+        print("Restoring from", latest_checkpoint)
+        return tf.keras.models.load_model(latest_checkpoint)
+model = restore_model()
 
 predicted_image = model.predict(test_dataset, batch_size=BATCH_SIZE, verbose=1)
 predicted_image = predicted_image.reshape((rows, cols, depth))  # type: np.ndarray

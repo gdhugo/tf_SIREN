@@ -14,16 +14,8 @@ def normalize_array(arr):
     norm_arr = (arr - np.min(arr)) / (np.max(arr) - np.min(arr))
     return norm_arr
 
-img_filepath = 'data/image_ct.mha'
-img_raw = normalize_array(sitk.GetArrayFromImage(sitk.ReadImage(img_filepath, outputPixelType=sitk.sitkFloat32)))
-img_ground_truth = tf.convert_to_tensor(img_raw, dtype=tf.float32)
 
-rows, cols, depth = img_ground_truth.shape
-channels = 1
-pixel_count = rows * cols * depth
-sampled_pixel_count = int(pixel_count * SAMPLING_RATIO)
-
-def build_train_tensors():
+def build_train_tensors(sampled_pixel_count, rows, cols, depth):
     img_mask_x = tf.random.uniform([sampled_pixel_count], maxval=rows, seed=0, dtype=tf.int32)
     img_mask_y = tf.random.uniform([sampled_pixel_count], maxval=cols, seed=1, dtype=tf.int32)
     img_mask_z = tf.random.uniform([sampled_pixel_count], maxval=depth, seed=1, dtype=tf.int32)
@@ -43,14 +35,9 @@ def build_train_tensors():
 
     return img_mask, img_train
 
-img_mask, img_train = build_train_tensors()
-
-train_dataset = tf.data.Dataset.from_tensor_slices((img_mask, img_train))
-train_dataset = train_dataset.shuffle(train_dataset.cardinality()).batch(BATCH_SIZE).cache()
-train_dataset = train_dataset.prefetch(tf.data.experimental.AUTOTUNE)
 
 # Build model
-def get_compiled_model():
+def get_compiled_model(num_steps):
     model = siren_mlp.SIRENModel(units=256, final_units=channels, final_activation='sigmoid', num_layers=5, w0=1.0, w0_initial=30.0)
 
     # instantiate model
@@ -58,16 +45,59 @@ def get_compiled_model():
 
     model.summary()
 
-    BATCH_SIZE = min(BATCH_SIZE, len(img_mask))
-    num_steps = int(len(img_mask) * EPOCHS / BATCH_SIZE)
-    print("Total training steps : ", num_steps)
     learning_rate = tf.keras.optimizers.schedules.PolynomialDecay(5e-4, decay_steps=num_steps, end_learning_rate=5e-5, power=2.0)
 
     optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
     loss = tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.NONE)  # Sum of squared error
     model.compile(optimizer, loss=loss)
     return model
-        
+
+
+def make_or_restore_model(checkpoint_dir, num_steps):
+    # Either restore the latest model, or create a fresh one
+    # if there is no checkpoint available.
+    checkpoints = [checkpoint_dir + "/" + name for name in os.listdir(checkpoint_dir)]
+    if checkpoints:
+        latest_checkpoint = max(checkpoints, key=os.path.getctime)
+        print("Restoring from", latest_checkpoint)
+        return tf.keras.models.load_model(latest_checkpoint)
+    print("Creating a new model")
+    return get_compiled_model(num_steps)
+
+
+def run_training(epochs, checkpoint_dir, num_steps):
+    strategy = tf.distribute.MirroredStrategy()
+    print("Number of available devices: {}".format(strategy.num_replicas_in_sync))
+
+    with strategy.scope():
+        model = make_or_restore_model(checkpoint_dir, num_steps)
+
+    callbacks = [
+        tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_dir + "/ckpt-{epoch}", monitor='loss', save_freq="epoch", save_best_only=True), #(checkpoint_dir + 'model.weights.h5', monitor='loss', verbose=0, save_best_only=True, save_weights_only=True, mode='min'),
+        tf.keras.callbacks.TensorBoard(logdir, update_freq='batch', profile_batch=20)
+    ]
+
+    model.fit(train_dataset, epochs=epochs, callbacks=callbacks, verbose=2)
+
+
+img_filepath = 'data/image_ct.mha'
+img_raw = normalize_array(sitk.GetArrayFromImage(sitk.ReadImage(img_filepath, outputPixelType=sitk.sitkFloat32)))
+img_ground_truth = tf.convert_to_tensor(img_raw, dtype=tf.float32)
+
+rows, cols, depth = img_ground_truth.shape
+channels = 1
+pixel_count = rows * cols * depth
+sampled_pixel_count = int(pixel_count * SAMPLING_RATIO)
+
+img_mask, img_train = build_train_tensors(sampled_pixel_count, rows, cols, depth)
+
+train_dataset = tf.data.Dataset.from_tensor_slices((img_mask, img_train))
+train_dataset = train_dataset.shuffle(train_dataset.cardinality()).batch(BATCH_SIZE).cache()
+train_dataset = train_dataset.prefetch(tf.data.experimental.AUTOTUNE)
+
+batch_size = min(BATCH_SIZE, len(img_mask))
+num_steps = int(len(img_mask) * EPOCHS / batch_size)
+print("Total training steps : ", num_steps)
 
 checkpoint_dir = 'checkpoints/siren/inpainting/'
 if not os.path.exists(checkpoint_dir):
@@ -78,32 +108,4 @@ logdir = os.path.join('logs/siren/inpainting/', timestamp)
 if not os.path.exists(logdir):
     os.makedirs(logdir)
 
-
-def make_or_restore_model():
-    # Either restore the latest model, or create a fresh one
-    # if there is no checkpoint available.
-    checkpoints = [checkpoint_dir + "/" + name for name in os.listdir(checkpoint_dir)]
-    if checkpoints:
-        latest_checkpoint = max(checkpoints, key=os.path.getctime)
-        print("Restoring from", latest_checkpoint)
-        return tf.keras.models.load_model(latest_checkpoint)
-    print("Creating a new model")
-    return get_compiled_model()
-
-
-def run_training(epochs=1):
-    strategy = tf.distribute.MirroredStrategy()
-    print("Number of available devices: {}".format(strategy.num_replicas_in_sync))
-
-    with strategy.scope():
-        model = make_or_restore_model()
-
-    callbacks = [
-        tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_dir + "/ckpt-{epoch}", monitor='loss', save_freq="epoch", save_best_only=True), #(checkpoint_dir + 'model.weights.h5', monitor='loss', verbose=0, save_best_only=True, save_weights_only=True, mode='min'),
-        tf.keras.callbacks.TensorBoard(logdir, update_freq='batch', profile_batch=20)
-    ]
-
-    model.fit(train_dataset, epochs=epochs, callbacks=callbacks, verbose=2)
-
-
-run_training(epochs=EPOCHS)
+run_training(epochs=EPOCHS, checkpoint_dir=checkpoint_dir, num_steps=num_steps)
