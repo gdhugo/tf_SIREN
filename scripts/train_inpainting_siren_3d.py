@@ -50,10 +50,7 @@ train_dataset = train_dataset.shuffle(train_dataset.cardinality()).batch(BATCH_S
 train_dataset = train_dataset.prefetch(tf.data.experimental.AUTOTUNE)
 
 # Build model
-strategy = tf.distribute.MirroredStrategy()
-print("Number of devices: {}".format(strategy.num_replicas_in_sync))
-
-with strategy.scope():
+def get_compiled_model():
     model = siren_mlp.SIRENModel(units=256, final_units=channels, final_activation='sigmoid', num_layers=5, w0=1.0, w0_initial=30.0)
 
     # instantiate model
@@ -69,22 +66,44 @@ with strategy.scope():
     optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
     loss = tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.NONE)  # Sum of squared error
     model.compile(optimizer, loss=loss)
+    return model
+        
 
 checkpoint_dir = 'checkpoints/siren/inpainting/'
 if not os.path.exists(checkpoint_dir):
     os.makedirs(checkpoint_dir)
 
-
 timestamp = datetime.now().strftime('%Y-%m-%d %H-%M-%S')
 logdir = os.path.join('logs/siren/inpainting/', timestamp)
-
 if not os.path.exists(logdir):
     os.makedirs(logdir)
 
-callbacks = [
-    tf.keras.callbacks.ModelCheckpoint(checkpoint_dir + 'model.weights.h5', monitor='loss', verbose=0,
-                                       save_best_only=True, save_weights_only=True, mode='min'),
-    tf.keras.callbacks.TensorBoard(logdir, update_freq='batch', profile_batch=20)
-]
 
-model.fit(train_dataset, epochs=EPOCHS, callbacks=callbacks, verbose=2)
+def make_or_restore_model():
+    # Either restore the latest model, or create a fresh one
+    # if there is no checkpoint available.
+    checkpoints = [checkpoint_dir + "/" + name for name in os.listdir(checkpoint_dir)]
+    if checkpoints:
+        latest_checkpoint = max(checkpoints, key=os.path.getctime)
+        print("Restoring from", latest_checkpoint)
+        return tf.keras.models.load_model(latest_checkpoint)
+    print("Creating a new model")
+    return get_compiled_model()
+
+
+def run_training(epochs=1):
+    strategy = tf.distribute.MirroredStrategy()
+    print("Number of available devices: {}".format(strategy.num_replicas_in_sync))
+
+    with strategy.scope():
+        model = make_or_restore_model()
+
+    callbacks = [
+        tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_dir + "/ckpt-{epoch}", monitor='loss', save_freq="epoch", save_best_only=True), #(checkpoint_dir + 'model.weights.h5', monitor='loss', verbose=0, save_best_only=True, save_weights_only=True, mode='min'),
+        tf.keras.callbacks.TensorBoard(logdir, update_freq='batch', profile_batch=20)
+    ]
+
+    model.fit(train_dataset, epochs=epochs, callbacks=callbacks, verbose=2)
+
+
+run_training(epochs=EPOCHS)
