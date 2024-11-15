@@ -6,8 +6,8 @@ import SimpleITK as sitk
 import numpy as np
 
 SAMPLING_RATIO = 0.3
-BATCH_SIZE = 1048576 #8192
-EPOCHS = 5000
+BATCH_SIZE = 16384 #1048576 #8192
+EPOCHS = 50000
 
 # Image - CT scan
 def normalize_array(arr):
