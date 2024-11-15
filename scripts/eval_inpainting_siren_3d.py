@@ -54,7 +54,7 @@ test_dataset = test_dataset.batch(BATCH_SIZE).prefetch(tf.data.experimental.AUTO
 #model = siren_mlp.SIRENModel(units=256, final_units=channels, final_activation='sigmoid', num_layers=5, w0=1.0, w0_initial=30.0)
 
 # Restore model
-checkpoint_dir = 'checkpoints/siren/inpainting/model'
+checkpoint_dir = 'checkpoints/siren/inpainting/'
 
 # instantiate model
 #_ = model(tf.zeros([1, 3]))
@@ -65,7 +65,7 @@ def restore_model():
     checkpoints = [checkpoint_dir + "/" + name for name in os.listdir(checkpoint_dir)]
     if checkpoints:
         latest_checkpoint = max(checkpoints, key=os.path.getctime)
-        print("Restoring from", latest_checkpoint)
+        print("Restoring from: ", latest_checkpoint)
         return tf.keras.models.load_model(latest_checkpoint)
 model = restore_model()
 

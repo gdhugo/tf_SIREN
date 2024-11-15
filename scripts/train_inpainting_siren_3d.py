@@ -73,7 +73,7 @@ def run_training(epochs, checkpoint_dir, num_steps):
         model = make_or_restore_model(checkpoint_dir, num_steps)
 
     callbacks = [
-        tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_dir + "/ckpt-{epoch}", monitor='loss', save_freq="epoch", save_best_only=True), #(checkpoint_dir + 'model.weights.h5', monitor='loss', verbose=0, save_best_only=True, save_weights_only=True, mode='min'),
+        tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_dir + "/ckpt-model-{epoch}.keras", monitor='loss', save_freq="epoch", save_best_only=True), #(checkpoint_dir + 'model.weights.h5', monitor='loss', verbose=0, save_best_only=True, save_weights_only=True, mode='min'),
         tf.keras.callbacks.TensorBoard(logdir, update_freq='batch', profile_batch=20)
     ]
 
