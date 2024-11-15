@@ -50,21 +50,25 @@ train_dataset = train_dataset.shuffle(train_dataset.cardinality()).batch(BATCH_S
 train_dataset = train_dataset.prefetch(tf.data.experimental.AUTOTUNE)
 
 # Build model
-model = siren_mlp.SIRENModel(units=256, final_units=channels, final_activation='sigmoid', num_layers=5, w0=1.0, w0_initial=30.0)
+strategy = tf.distribute.MirroredStrategy()
+print("Number of devices: {}".format(strategy.num_replicas_in_sync))
 
-# instantiate model
-_ = model(tf.zeros([1, 3]))
+with strategy.scope():
+    model = siren_mlp.SIRENModel(units=256, final_units=channels, final_activation='sigmoid', num_layers=5, w0=1.0, w0_initial=30.0)
 
-model.summary()
+    # instantiate model
+    _ = model(tf.zeros([1, 3]))
 
-BATCH_SIZE = min(BATCH_SIZE, len(img_mask))
-num_steps = int(len(img_mask) * EPOCHS / BATCH_SIZE)
-print("Total training steps : ", num_steps)
-learning_rate = tf.keras.optimizers.schedules.PolynomialDecay(5e-4, decay_steps=num_steps, end_learning_rate=5e-5, power=2.0)
+    model.summary()
 
-optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
-loss = tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.NONE)  # Sum of squared error
-model.compile(optimizer, loss=loss)
+    BATCH_SIZE = min(BATCH_SIZE, len(img_mask))
+    num_steps = int(len(img_mask) * EPOCHS / BATCH_SIZE)
+    print("Total training steps : ", num_steps)
+    learning_rate = tf.keras.optimizers.schedules.PolynomialDecay(5e-4, decay_steps=num_steps, end_learning_rate=5e-5, power=2.0)
+
+    optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
+    loss = tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.NONE)  # Sum of squared error
+    model.compile(optimizer, loss=loss)
 
 checkpoint_dir = 'checkpoints/siren/inpainting/'
 if not os.path.exists(checkpoint_dir):
